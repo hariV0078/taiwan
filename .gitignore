@@ -1,0 +1,12 @@
+venv/
+venv_conda_backup_20260421/
+.vscode/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+.env
+circularx.db
+chroma_store/
+storage/dpps/*.pdf
