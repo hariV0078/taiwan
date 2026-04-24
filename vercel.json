@@ -1,6 +1,5 @@
 {
-  "buildCommand": "pip install -r requirements.txt",
-  "env": {
-    "PYTHON_TARGETS": "3.12"
-  }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
+  ]
 }
