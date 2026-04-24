@@ -1,7 +1,6 @@
 {
-  "functions": {
-    "api/*.py": {
-      "excludeFiles": "{tests/**,__tests__/**,**/*.test.py,**/test_*.py,fixtures/**,__fixtures__/**,testdata/**,sample-data/**,static/**,assets/**,venv/**,venv_conda_backup_20260421/**}"
-    }
+  "buildCommand": "pip install -r requirements.txt",
+  "env": {
+    "PYTHON_TARGETS": "3.12"
   }
 }
