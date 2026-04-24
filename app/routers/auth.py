@@ -92,77 +92,32 @@ def create_access_token(user_id: uuid.UUID, role: UserRole) -> str:
 
 
 def get_current_user(request: Request, token: Optional[str] = Depends(oauth2_scheme)) -> User:
-    """Extract and validate the JWT token, return the user."""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-    )
-
-    # Check for test role header first (for development/testing)
-    requested_role = request.headers.get("x-test-role")
-    if requested_role:
-        requested_role = requested_role.strip().lower()
-        try:
-            role = UserRole(requested_role)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid x-test-role. Use manufacturer, buyer, tpqc, or admin",
-            ) from exc
-
-        email = f"test-{role.value}@local"
-        with Session(engine) as session:
-            user = session.exec(select(User).where(User.email == email)).first()
-            if not user:
-                user = User(
-                    name=f"Test {role.value.title()}",
-                    email=email,
-                    password_hash="",
-                    role=role,
-                    company=settings.TEST_USER_COMPANY,
-                    country=settings.TEST_USER_COUNTRY,
-                    is_active=True,
-                )
-                session.add(user)
-                session.commit()
-                session.refresh(user)
-            return user
-
-    # If AUTH_BYPASS is enabled and no x-test-role header, create default admin user
-    if settings.AUTH_BYPASS:
-        email = f"test-admin@local"
-        with Session(engine) as session:
-            user = session.exec(select(User).where(User.email == email)).first()
-            if not user:
-                user = User(
-                    name="Test Admin",
-                    email=email,
-                    password_hash="",
-                    role=UserRole.admin,
-                    company=settings.TEST_USER_COMPANY,
-                    country=settings.TEST_USER_COUNTRY,
-                    is_active=True,
-                )
-                session.add(user)
-                session.commit()
-                session.refresh(user)
-            return user
-
-    if not token:
-        raise credentials_exception
-
+    """
+    DEVELOPMENT ONLY: Auth is disabled. Always returns a test user based on x-test-role header or defaults to admin.
+    """
+    # Get role from header or default to admin
+    requested_role = (request.headers.get("x-test-role") or "admin").strip().lower()
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id = payload.get("sub")
-        if not user_id:
-            raise credentials_exception
-    except JWTError as exc:
-        raise credentials_exception from exc
+        role = UserRole(requested_role)
+    except ValueError:
+        role = UserRole.admin
 
+    email = f"test-{role.value}@local"
     with Session(engine) as session:
-        user = session.get(User, uuid.UUID(user_id))
+        user = session.exec(select(User).where(User.email == email)).first()
         if not user:
-            raise credentials_exception
+            user = User(
+                name=f"Test {role.value.title()}",
+                email=email,
+                password_hash="",
+                role=role,
+                company=settings.TEST_USER_COMPANY,
+                country=settings.TEST_USER_COUNTRY,
+                is_active=True,
+            )
+            session.add(user)
+            session.commit()
+            session.refresh(user)
         return user
 
 
