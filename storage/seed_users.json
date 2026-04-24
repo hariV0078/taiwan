@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Raj Manufacturing",
+    "email": "manufacturer@raj-plastics.com",
+    "company": "Raj Plastics Ltd",
+    "country": "IN",
+    "role": "manufacturer"
+  },
+  {
+    "name": "Sarah Chen",
+    "email": "buyer@eco-recycle.tw",
+    "company": "Eco Recycle Taiwan",
+    "country": "TW",
+    "role": "buyer"
+  },
+  {
+    "name": "TPQC Inspector",
+    "email": "inspector@qualitycheck.com",
+    "company": "Quality Check International",
+    "country": "IN",
+    "role": "tpqc"
+  },
+  {
+    "name": "System Admin",
+    "email": "admin@circularx.com",
+    "company": "CircularX",
+    "country": "IN",
+    "role": "admin"
+  },
+  {
+    "name": "Plastic Waste Traders",
+    "email": "manufacturer2@pwt.in",
+    "company": "Plastic Waste Traders",
+    "country": "IN",
+    "role": "manufacturer"
+  },
+  {
+    "name": "German Industrial",
+    "email": "buyer2@german-ind.de",
+    "company": "German Industrial Recycling",
+    "country": "DE",
+    "role": "buyer"
+  }
+]

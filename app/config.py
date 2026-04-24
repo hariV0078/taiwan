@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     CHROMA_PERSIST_PATH: str = "./chroma_store"
     DPP_STORAGE_PATH: str = "./storage/dpps"
     PLATFORM_FEE_PCT: float = 2.0
+    AUTH_BYPASS: bool = False
+    TEST_USER_COMPANY: str = "Test Company"
+    TEST_USER_COUNTRY: str = "IN"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

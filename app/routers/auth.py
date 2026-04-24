@@ -33,6 +33,27 @@ if settings.SUPABASE_URL and settings.SUPABASE_KEY:
             supabase_client = None
 
 
+class UserRegisterRequest(BaseModel):
+    """Frontend user registration request (for non-OAuth user creation)."""
+    email: EmailStr
+    name: str
+    company: str
+    country: str
+    role: UserRole
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "email": "john@company.com",
+                "name": "John Doe",
+                "company": "Recycling Co",
+                "country": "IN",
+                "role": "manufacturer"
+            }
+        }
+    )
+
+
 class OAuth2LoginRequest(BaseModel):
     provider: str  # 'google', 'github', etc.
     
@@ -83,12 +104,29 @@ class UserOut(BaseModel):
     country: str
     is_active: bool
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 def create_access_token(user_id: uuid.UUID, role: UserRole) -> str:
     """Create a JWT token for the user."""
     expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {"sub": str(user_id), "role": role.value, "exp": expire}
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def _detach_user(user: User) -> User:
+    """Return a standalone User object that is safe outside DB session scope."""
+    return User(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        password_hash=user.password_hash,
+        role=user.role,
+        company=user.company,
+        country=user.country,
+        created_at=user.created_at,
+        is_active=user.is_active,
+    )
 
 
 def get_current_user(request: Request, token: Optional[str] = Depends(oauth2_scheme)) -> User:
@@ -118,7 +156,7 @@ def get_current_user(request: Request, token: Optional[str] = Depends(oauth2_sch
             session.add(user)
             session.commit()
             session.refresh(user)
-        return user
+        return _detach_user(user)
 
 
 @router.post("/oauth/login")
@@ -203,3 +241,36 @@ def oauth_callback(payload: OAuth2CallbackRequest):
 def me(current_user: User = Depends(get_current_user)):
     """Return the current authenticated user profile."""
     return UserOut.model_validate(current_user)
+
+
+@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+def register(payload: UserRegisterRequest):
+    """
+    Register a new user via frontend form (non-OAuth).
+    Frontend can use this to create users directly without OAuth.
+    Returns the created user profile.
+    """
+    with Session(engine) as session:
+        # Check if user already exists
+        existing_user = session.exec(select(User).where(User.email == payload.email)).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"User with email {payload.email} already exists"
+            )
+        
+        # Create new user
+        user = User(
+            name=payload.name,
+            email=payload.email,
+            password_hash="",  # Direct registration users don't have passwords
+            role=payload.role,
+            company=payload.company,
+            country=payload.country,
+            is_active=True,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        
+        return UserOut.model_validate(user)

@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, select
 
 from app.config import get_settings
@@ -56,6 +56,8 @@ class TransactionOut(BaseModel):
     verified_at: Optional[datetime]
     released_at: Optional[datetime]
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class AuditOut(BaseModel):
     id: uuid.UUID
@@ -67,6 +69,8 @@ class AuditOut(BaseModel):
     hash: str
     prev_hash: str
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get("/", response_model=list[TransactionOut], status_code=status.HTTP_200_OK)

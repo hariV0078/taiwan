@@ -30,7 +30,12 @@ def _normalize_database_url(url: str) -> str:
     return normalized
 
 
-database_url = _normalize_database_url(settings.SUPABASE_DATABASE_URL) or settings.DATABASE_URL
+# During local no-auth testing, force SQLite to keep all routes reachable.
+database_url = (
+    settings.DATABASE_URL
+    if settings.AUTH_BYPASS
+    else (_normalize_database_url(settings.SUPABASE_DATABASE_URL) or settings.DATABASE_URL)
+)
 connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
 engine = create_engine(database_url, echo=False, connect_args=connect_args)
 

@@ -70,6 +70,8 @@ class ListingOut(BaseModel):
     created_at: datetime
     expires_at: Optional[datetime]
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 def _latest_listing_hash(listing_id: uuid.UUID, session: Session) -> str:
