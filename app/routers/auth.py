@@ -1,6 +1,7 @@
 import traceback
 import uuid
 from datetime import datetime, timedelta
+from typing import Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
@@ -90,7 +91,7 @@ def create_access_token(user_id: uuid.UUID, role: UserRole) -> str:
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def get_current_user(request: Request, token: str | None = Depends(oauth2_scheme)) -> User:
+def get_current_user(request: Request, token: Optional[str] = Depends(oauth2_scheme)) -> User:
     """Extract and validate the JWT token, return the user."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
