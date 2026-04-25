@@ -8,6 +8,7 @@ from pathlib import Path
 from sqlmodel import Session, select
 from app.database import engine
 from app.models.user import User, UserRole
+from app.routers.auth import get_password_hash
 
 
 def load_seed_users() -> list[dict]:
@@ -38,13 +39,20 @@ def seed_users() -> int:
             ).first()
             
             if existing:
+                # Update password for presentation purposes
+                existing.password_hash = get_password_hash("pass123")
+                existing.name = user_data["name"]
+                existing.company = user_data["company"]
+                existing.role = UserRole(user_data["role"])
+                session.add(existing)
+                created_count += 1
                 continue
             
             # Create new user from fixture
             user = User(
                 name=user_data["name"],
                 email=user_data["email"],
-                password_hash="",  # Seed users don't have passwords
+                password_hash=get_password_hash("pass123"),
                 role=UserRole(user_data["role"]),
                 company=user_data["company"],
                 country=user_data["country"],

@@ -128,3 +128,5 @@ Additional architecture and setup references:
 - `SUPABASE_DB_SETUP_AND_REQUEST_FORMATS.md`
 - `SUPABASE_OAUTH_SETUP.md`
 - `REDESIGN_GAP_ANALYSIS.md`
+- `HACKATHON_AI_ARCHITECTURE.md` (Detailed Architecture & Pitch)
+- `HACKATHON_PRESENTATION.md` (Slide-deck Format for Presentation)

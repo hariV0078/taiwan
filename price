@@ -67,6 +67,7 @@
     { "category": "Fiber", "material": "Sorted Office Paper (PS 37)", "low": 100, "mid": 117, "high": 135 },
     { "category": "Fiber", "material": "Sorted Newsprint (PS 56)", "low": 45, "mid": 55, "high": 65 },
     { "category": "Textiles", "material": "Mixed Cotton Rags", "low": 150, "mid": 250, "high": 400 },
+    { "category": "Textiles", "material": "High-Grade Cotton Garnetted Stock", "low": 800, "mid": 1050, "high": 1300 },
     { "category": "Textiles", "material": "Synthetic Fibre Waste (PET)", "low": 80, "mid": 150, "high": 220 },
     { "category": "Wood", "material": "Grade A Clean Pallets", "low": 40, "mid": 60, "high": 90 },
     { "category": "Wood", "material": "Mixed Industrial Timber", "low": 10, "mid": 25, "high": 45 }

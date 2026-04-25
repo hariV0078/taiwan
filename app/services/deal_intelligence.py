@@ -97,14 +97,23 @@ class TrustScore:
         return max(0.0, min(1.0, trust_score))
 
     @staticmethod
-    def bulk_update_trust_scores(session: Session) -> dict:
-        """Calculate and store trust scores for all active users."""
+    def bulk_update_trust_scores(session: Session) -> list:
+        """Calculate and store trust scores for all active users with metadata."""
         users = session.exec(select(User)).all()
-        scores = {}
+        results = []
         for user in users:
             score = TrustScore.calculate_user_trust_score(str(user.id), session)
-            scores[str(user.id)] = score
-        return scores
+            user.trust_score = score
+            session.add(user)
+            results.append({
+                "user_id": str(user.id),
+                "name": user.name,
+                "role": user.role.value,
+                "company": user.company,
+                "trust_score": round(score, 2)
+            })
+        session.commit()
+        return results
 
 
 class DealAnalysis:
@@ -251,8 +260,8 @@ class DealIntelligenceAgent:
 
         now = datetime.utcnow()
         for transaction in active_transactions:
-            # Check last activity time
-            last_activity = transaction.buyer_confirmed_interest_at or transaction.matched_at
+            # Check last activity time using the updated_at column
+            last_activity = getattr(transaction, 'updated_at', None) or transaction.buyer_confirmed_interest_at or transaction.matched_at
             time_since_activity = now - last_activity
 
             if time_since_activity > self.stall_threshold:

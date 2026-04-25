@@ -44,6 +44,15 @@ class TransactionOut(BaseModel):
     qar_notes: Optional[str]
     dpp_path: Optional[str]
     co2_saved_kg: Optional[float]
+    seller_name: Optional[str] = None
+    material_type: Optional[str] = None
+    material_grade: Optional[str] = None
+    purity_pct: Optional[float] = None
+    location_city: Optional[str] = None
+    location_country: Optional[str] = None
+    quantity_kg: Optional[float] = None
+    created_at: Optional[datetime] = None
+    confidence_score: Optional[float] = None
     matched_at: datetime
     buyer_confirmed_interest_at: Optional[datetime]
     initial_proposed_price: Optional[float]
@@ -82,13 +91,32 @@ def list_transactions(current_user: User = Depends(get_current_user)):
                 query = select(Transaction).where(Transaction.seller_id == current_user.id)
             elif current_user.role == UserRole.buyer:
                 query = select(Transaction).where(Transaction.buyer_id == current_user.id)
-            elif current_user.role == UserRole.tpqc:
-                query = select(Transaction).where(Transaction.status == TransactionStatus.locked)
+            elif current_user.role == UserRole.tpqc or current_user.role == UserRole.admin:
+                query = select(Transaction)
             else:
                 query = select(Transaction)
 
             rows = session.exec(query).all()
-            return [TransactionOut.model_validate(x) for x in rows]
+            
+            result = []
+            for tx in rows:
+                out = TransactionOut.model_validate(tx)
+                listing = session.get(WasteListing, tx.listing_id)
+                if listing:
+                    out.material_type = listing.material_type
+                    out.material_grade = listing.grade
+                    out.purity_pct = listing.purity_pct
+                    out.location_city = listing.location_city
+                    out.location_country = listing.location_country
+                    out.quantity_kg = listing.quantity_kg
+                    out.created_at = listing.created_at
+                    out.confidence_score = listing.confidence_score
+                    from app.models.user import User
+                    seller = session.get(User, tx.seller_id)
+                    if seller:
+                        out.seller_name = seller.name
+                result.append(out)
+            return result
     except Exception:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -277,6 +305,94 @@ class PricingResponse(BaseModel):
     current_status: str
 
 
+class UpdateProfileRequest(BaseModel):
+    max_price_per_kg: float
+
+
+@router.post("/buyer-profile", response_model=dict, status_code=status.HTTP_200_OK)
+def update_buyer_profile(payload: UpdateProfileRequest, current_user: User = Depends(get_current_user)):
+    """Update the buyer's global negotiation profile (ceiling price)."""
+    if current_user.role != UserRole.buyer:
+        raise HTTPException(status_code=403, detail="Only buyers can update profiles")
+    
+    with Session(engine) as session:
+        profile = session.exec(select(BuyerProfile).where(BuyerProfile.buyer_id == current_user.id)).first()
+        if not profile:
+            profile = BuyerProfile(
+                buyer_id=current_user.id,
+                material_needs="All",
+                accepted_grades="A1,A2,B1",
+                accepted_countries="Taiwan",
+                max_price_per_kg=payload.max_price_per_kg,
+                min_quantity_kg=0,
+                max_quantity_kg=999999
+            )
+        else:
+            profile.max_price_per_kg = payload.max_price_per_kg
+        
+        profile.updated_at = datetime.utcnow()
+        session.add(profile)
+        session.commit()
+        return {"status": "success", "max_price_per_kg": profile.max_price_per_kg}
+
+
+@router.post("/listing/{listing_id}/express-interest", response_model=TransactionOut, status_code=status.HTTP_200_OK)
+def express_interest_in_listing(listing_id: uuid.UUID, current_user: User = Depends(get_current_user)):
+    """Allow a buyer to directly express interest in a listing, creating a transaction if needed."""
+    if current_user.role != UserRole.buyer:
+        raise HTTPException(status_code=403, detail="Only buyers can express interest")
+    
+    try:
+        with Session(engine) as session:
+            listing = session.get(WasteListing, listing_id)
+            if not listing:
+                raise HTTPException(status_code=404, detail="Listing not found")
+            
+            # Check if transaction already exists
+            tx = session.exec(
+                select(Transaction)
+                .where(Transaction.listing_id == listing_id)
+                .where(Transaction.buyer_id == current_user.id)
+            ).first()
+            
+            if not tx:
+                tx = Transaction(
+                    listing_id=listing_id,
+                    seller_id=listing.seller_id,
+                    buyer_id=current_user.id,
+                    status=TransactionStatus.buyer_interested
+                )
+            else:
+                if tx.status == TransactionStatus.matched:
+                    tx.status = TransactionStatus.buyer_interested
+                else:
+                    # Already moved past interest
+                    return TransactionOut.model_validate(tx)
+            
+            tx.buyer_confirmed_interest_at = datetime.utcnow()
+            tx.updated_at = datetime.utcnow()
+            session.add(tx)
+            session.commit()
+            session.refresh(tx)
+            
+            # Audit & Notification
+            payload_data = {"transaction_id": str(tx.id), "buyer_id": str(tx.buyer_id), "source": "marketplace_direct"}
+            prev = session.exec(select(AuditTrail).where(AuditTrail.transaction_id == tx.id).order_by(AuditTrail.created_at.desc())).first()
+            prev_hash = prev.hash if prev else "GENESIS"
+            session.add(AuditTrail(transaction_id=tx.id, listing_id=tx.listing_id, event_type=AuditEventType.negotiation_start, actor_id=current_user.id, payload=json.dumps(payload_data), hash=generate_event_hash(AuditEventType.negotiation_start.value, payload_data, prev_hash), prev_hash=prev_hash))
+            
+            notification = Notification(user_id=tx.seller_id, transaction_id=tx.id, message="Buyer expressed direct interest in your listing", notification_type="BUYER_CONFIRMED")
+            session.add(notification)
+            session.commit()
+            
+            return TransactionOut.model_validate(tx)
+    except HTTPException:
+        raise
+    except Exception:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.post("/{transaction_id}/buyer-confirms-interest", response_model=TransactionOut, status_code=status.HTTP_200_OK)
 def buyer_confirms_interest(
     transaction_id: uuid.UUID,
@@ -296,6 +412,7 @@ def buyer_confirms_interest(
             
             tx.status = TransactionStatus.buyer_interested
             tx.buyer_confirmed_interest_at = datetime.utcnow()
+            tx.updated_at = datetime.utcnow()
             session.add(tx)
             session.commit()
             session.refresh(tx)
@@ -328,8 +445,8 @@ def propose_price(transaction_id: uuid.UUID, current_user: User = Depends(get_cu
             tx = session.get(Transaction, transaction_id)
             if not tx:
                 raise HTTPException(status_code=404, detail="Transaction not found")
-            if tx.status != TransactionStatus.buyer_interested:
-                raise HTTPException(status_code=400, detail=f"Transaction must be BUYER_INTERESTED, not {tx.status}")
+            if tx.status not in {TransactionStatus.buyer_interested, TransactionStatus.price_proposed}:
+                raise HTTPException(status_code=400, detail=f"Transaction must be BUYER_INTERESTED or PRICE_PROPOSED, not {tx.status}")
             
             listing = session.get(WasteListing, tx.listing_id)
             if not listing:
@@ -361,6 +478,7 @@ def propose_price(transaction_id: uuid.UUID, current_user: User = Depends(get_cu
             tx.status = TransactionStatus.price_proposed
             tx.initial_proposed_price = proposed_price
             tx.counter_offer_expires_at = datetime.utcnow() + timedelta(hours=24)
+            tx.updated_at = datetime.utcnow()
             session.add(tx)
             session.commit()
             session.refresh(tx)
@@ -415,6 +533,7 @@ def counter_offer(transaction_id: uuid.UUID, payload: CounterOfferRequest, curre
             else:
                 tx.status = TransactionStatus.price_countered
             
+            tx.updated_at = datetime.utcnow()
             session.add(tx)
             session.commit()
             session.refresh(tx)
@@ -473,6 +592,7 @@ def accept_price(transaction_id: uuid.UUID, payload: AcceptPriceRequest, current
             else:
                 event_type = AuditEventType.negotiation_round
             
+            tx.updated_at = datetime.utcnow()
             session.add(tx)
             session.commit()
             session.refresh(tx)

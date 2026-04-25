@@ -27,20 +27,24 @@ Grading rubric:
 - B2: low grade, 40-60% purity
 - C: reject / broker-only, <40% purity or poor quality confidence
 
+Rules for 'confidence' (float between 0.0 and 1.0):
+- If purity > 90% and description is clear, confidence MUST be > 0.85.
+- If description is vague or purity is low, confidence should be < 0.70.
+
 Before grading, always check if material is restricted/banned and treat as blocked.
 Return concise but useful reasoning.
 
 Few-shot examples:
 1) Description: Clean HDPE regrind from post-industrial containers, Purity: 95
-   Output: category Plastic/HDPE, grade A1, confidence high.
+   Output: category Plastic/HDPE, grade A1, confidence 0.95.
 2) Description: Mixed PET flakes with labels and caps residue, Purity: 82
-   Output: category Plastic/PET, grade A2.
+   Output: category Plastic/PET, grade A2, confidence 0.85.
 3) Description: Rusted mixed steel scrap with paint contamination, Purity: 68
-   Output: category Metal/Steel, grade B1.
+   Output: category Metal/Steel, grade B1, confidence 0.75.
 4) Description: Insulated copper wire bundles with plastics attached, Purity: 55
-   Output: category Metal/Copper, grade B2.
+   Output: category Metal/Copper, grade B2, confidence 0.65.
 5) Description: Mixed municipal plastic waste with food contamination, Purity: 35
-   Output: category Mixed/Plastic Waste, grade C.
+   Output: category Mixed/Plastic Waste, grade C, confidence 0.40.
 """
 
 
@@ -56,6 +60,8 @@ def _fallback(reason: str) -> ClassificationResult:
     )
 
 
+from app.config import get_settings
+
 def classify_material(description: str, quantity_kg: float, purity_pct: float) -> ClassificationResult:
     blocked, reason = check_restricted(description)
     if blocked:
@@ -70,7 +76,8 @@ def classify_material(description: str, quantity_kg: float, purity_pct: float) -
         )
 
     try:
-        model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        settings = get_settings()
+        model = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=settings.OPENAI_API_KEY)
         structured = model.with_structured_output(ClassificationResult)
         result = structured.invoke(
             [
@@ -86,9 +93,16 @@ def classify_material(description: str, quantity_kg: float, purity_pct: float) -
                 ),
             ]
         )
+        
+        if isinstance(result, dict):
+            result = ClassificationResult(**result)
+            
         result.is_blocked = False
         result.block_reason = None
         result.needs_tpqc = bool(result.confidence < 0.70)
         return result
-    except Exception:
-        return _fallback("LLM classification unavailable, conservative fallback applied.")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        # Fallback with error
+        return _fallback(f"LLM classification unavailable: {str(e)}")

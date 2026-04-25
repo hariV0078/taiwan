@@ -38,6 +38,7 @@ class Transaction(SQLModel, table=True):
     dpp_path: Optional[str] = None
     co2_saved_kg: Optional[float] = None
     matched_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
     
     # NEW: Human-in-the-loop fields
     buyer_confirmed_interest_at: Optional[datetime] = None  # When buyer confirmed interest

@@ -13,28 +13,36 @@ Health check:
 
 ## Current Auth Mode
 
-Auth is currently bypassed for frontend testing.
+**Auth is now ENABLED.**
 
-Frontend must send header:
-- x-test-role: manufacturer
-- x-test-role: buyer
-- x-test-role: tpqc
-- x-test-role: admin
+Frontend must log in to obtain a JWT token and send it in the `Authorization` header for all subsequent requests.
 
-No bearer token is required in the current implementation.
+- Login: `POST /auth/login`
+- Shared Request Header: `Authorization: Bearer <token>`
 
 ## Shared Request Headers
 
 - Content-Type: application/json
-- x-test-role: one of manufacturer, buyer, tpqc, admin
+- Authorization: Bearer <token>
 
 ## Endpoint Groups
 
-### 1) Health and Identity
+### 1) Authentication and Identity
 
-- GET /health
-- GET /auth/me
+- POST /auth/login (get JWT token)
+- GET /auth/me (requires Bearer token)
 - POST /auth/register (new user creation)
+
+Login sample:
+
+```json
+{
+  "email": "alice@greentech.com",
+  "password": "pass123"
+}
+```
+
+Returns: `{"access_token": "...", "token_type": "bearer"}`
 
 Register sample:
 
@@ -173,6 +181,12 @@ Reject sample:
 - GET /notifications/
 - PATCH /notifications/{notification_id}/read
 - POST /notifications/mark-all-read
+
+### 8) Autonomous Deal Intelligence & Scheduler
+
+- GET /deal-intelligence/trust-scores (fetch reputation scores)
+- GET /scheduler/status (check if background agent is running)
+- POST /scheduler/trigger (force immediate deal monitoring pass)
 
 mark-all-read sample:
 

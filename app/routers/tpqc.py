@@ -36,25 +36,49 @@ class TPQCTransactionOut(BaseModel):
     seller_id: uuid.UUID
     buyer_id: uuid.UUID
     status: TransactionStatus
-    qar_notes: Optional[str]
-    qar_hash: Optional[str]
-    dpp_path: Optional[str]
-    co2_saved_kg: Optional[float]
-    verified_at: Optional[datetime]
-    released_at: Optional[datetime]
+    seller_name: Optional[str] = None
+    material_type: Optional[str] = None
+    location_city: Optional[str] = None
+    confidence_score: Optional[float] = None
+    quantity_kg: Optional[float] = None
+    qar_notes: Optional[str] = None
+    qar_hash: Optional[str] = None
+    dpp_path: Optional[str] = None
+    co2_saved_kg: Optional[float] = None
+    verified_at: Optional[datetime] = None
+    released_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get("/pending", response_model=list[TPQCTransactionOut], status_code=status.HTTP_200_OK)
 def pending_tpqc(current_user: User = Depends(get_current_user)):
-    """List all LOCKED transactions pending TPQC inspection."""
+    """List all transactions pending or in-progress for TPQC inspection."""
     if current_user.role != UserRole.tpqc:
         raise HTTPException(status_code=403, detail="TPQC role required")
     try:
         with Session(engine) as session:
             rows = session.exec(
-                select(Transaction).where(Transaction.status == TransactionStatus.locked)
+                select(Transaction).where(Transaction.status.in_([TransactionStatus.locked, TransactionStatus.inspecting, TransactionStatus.disputed]))
             ).all()
-            return [TPQCTransactionOut.model_validate(x) for x in rows]
+            
+            results = []
+            for tx in rows:
+                out = TPQCTransactionOut.model_validate(tx)
+                from app.models.listing import WasteListing
+                listing = session.get(WasteListing, tx.listing_id)
+                if listing:
+                    out.material_type = listing.material_type
+                    out.location_city = listing.location_city
+                    out.confidence_score = listing.confidence_score
+                    out.quantity_kg = listing.quantity_kg
+                    from app.models.user import User
+                    seller = session.get(User, tx.seller_id)
+                    if seller:
+                        out.seller_name = seller.name
+                results.append(out)
+            return results
     except Exception:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Internal server error")

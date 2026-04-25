@@ -44,27 +44,37 @@ def load_market_prices() -> dict:
 
 def _normalize_tokens(text: str) -> set[str]:
     words = re.findall(r"[a-z0-9]+", (text or "").lower())
-    return {w for w in words if len(w) > 2 and w not in _STOP_WORDS}
+    return {w for w in words if len(w) > 1 and w not in _STOP_WORDS}
 
 
 def _build_keyword_aliases() -> dict[str, set[str]]:
     return {
-        "aluminum": {"aluminum", "aluminium", "ubc"},
-        "copper": {"copper", "wire"},
-        "steel": {"steel", "hms", "stainless"},
-        "plastic": {"plastic", "pet", "hdpe", "pp", "ldpe", "pvc"},
-        "paper": {"paper", "cardboard", "occ", "newsprint"},
-        "fiber": {"fiber", "paper", "cardboard", "occ"},
-        "electronics": {"electronics", "pcb", "cpu", "ram", "ewaste", "battery"},
-        "textile": {"textile", "cotton", "fibre", "fiber"},
-        "chemical": {"chemical", "ipa", "toluene", "acetone", "methanol", "xylene", "mek"},
+        "aluminum": {"aluminum", "aluminium", "ubc", "al"},
+        "copper": {"copper", "wire", "cu"},
+        "steel": {"steel", "hms", "stainless", "iron", "fe"},
+        "plastic": {"plastic", "plastics", "pet", "hdpe", "pp", "ldpe", "pvc", "polymer"},
+        "paper": {"paper", "cardboard", "occ", "newsprint", "kraft"},
+        "fiber": {"fiber", "fibre", "pulp"},
+        "electronics": {"electronics", "pcb", "cpu", "ram", "ewaste", "battery", "lithium"},
+        "textile": {"textile", "textiles", "cotton", "yarn", "fabric", "cloth", "rag", "rags", "garnetted"},
+        "chemical": {"chemical", "chemicals", "ipa", "toluene", "acetone", "methanol", "xylene", "mek", "solvent"},
         "rubber": {"rubber", "tyre", "tire", "crumb", "tdf"},
         "wood": {"wood", "timber", "pallet"},
-        "glass": {"glass"},
+        "glass": {"glass", "cullet"},
     }
 
 
 def _score_market_item(material_category: str, item: dict, aliases: dict[str, set[str]]) -> int:
+    category_lower = (material_category or "").lower().strip()
+    item_mat_lower = item.get("material", "").lower()
+    item_cat_lower = item.get("category", "").lower()
+
+    # Exact match boosts
+    score = 0
+    if category_lower == item_mat_lower: score += 100
+    if category_lower == item_cat_lower: score += 50
+    if category_lower in item_mat_lower: score += 20
+
     category_tokens = _normalize_tokens(material_category)
     item_tokens = _normalize_tokens(item.get("material", ""))
     item_category_tokens = _normalize_tokens(item.get("category", ""))
@@ -78,7 +88,8 @@ def _score_market_item(material_category: str, item: dict, aliases: dict[str, se
             if item_tokens & words or item_category_tokens & words:
                 alias_hits += 1
 
-    return (len(overlap) * 5) + (len(overlap_category) * 3) + (alias_hits * 4)
+    score += (len(overlap) * 10) + (len(overlap_category) * 5) + (alias_hits * 8)
+    return score
 
 
 def _from_new_dataset(data: dict, material_category: str, grade: str) -> dict:

@@ -244,5 +244,16 @@ This feature demonstrates sophisticated marketplace design:
 4. **Context-aware:** Recommendations based on actual deal state, not generic rules
 5. **Self-correcting:** Each transaction teaches the system
 
-This is why judges in a hackathon will immediately recognize this as "real" autonomous broker software, not just a matching algorithm.
+## Visualization & UI
+
+The **QC Authority Portal** (Admin/TPQC Dashboard) provides real-time visibility into the Autonomous Deal Intelligence system:
+
+1. **Reputation Monitoring**: A dedicated panel displays current trust scores for all active users, allowing inspectors to see trust weights at a glance.
+2. **Agent Health**: Live status indicator showing if the background scheduler is "ACTIVE" or "PAUSED".
+3. **Stall Insights**: Visual breakdown of how many deals are currently under agent monitoring and their respective risk levels.
+
+This ensures that while the system is autonomous, it remains fully transparent to authorized human oversight.
+
+---
+**CircularX**: *Waste to Wealth, Autonomously.*
 

@@ -107,6 +107,22 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if not hashed_password:
+        return False
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
 def create_access_token(user_id: uuid.UUID, role: UserRole) -> str:
     """Create a JWT token for the user."""
     expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -131,32 +147,73 @@ def _detach_user(user: User) -> User:
 
 def get_current_user(request: Request, token: Optional[str] = Depends(oauth2_scheme)) -> User:
     """
-    DEVELOPMENT ONLY: Auth is disabled. Always returns a test user based on x-test-role header or defaults to admin.
+    Get the current authenticated user. Supports bypass for development.
     """
-    # Get role from header or default to admin
-    requested_role = (request.headers.get("x-test-role") or "admin").strip().lower()
-    try:
-        role = UserRole(requested_role)
-    except ValueError:
-        role = UserRole.admin
+    # 1. Check for bypass
+    if settings.AUTH_BYPASS:
+        requested_role = (request.headers.get("x-test-role") or "admin").strip().lower()
+        try:
+            role = UserRole(requested_role)
+        except ValueError:
+            role = UserRole.admin
 
-    email = f"test-{role.value}@local"
+        email = f"test-{role.value}@local"
+        with Session(engine) as session:
+            user = session.exec(select(User).where(User.email == email)).first()
+            if not user:
+                user = User(
+                    name=f"Test {role.value.title()}",
+                    email=email,
+                    password_hash=get_password_hash("pass123"),
+                    role=role,
+                    company=settings.TEST_USER_COMPANY,
+                    country=settings.TEST_USER_COUNTRY,
+                    is_active=True,
+                )
+                session.add(user)
+                session.commit()
+                session.refresh(user)
+            return _detach_user(user)
+
+    # 2. Real JWT Auth
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
     with Session(engine) as session:
-        user = session.exec(select(User).where(User.email == email)).first()
-        if not user:
-            user = User(
-                name=f"Test {role.value.title()}",
-                email=email,
-                password_hash="",
-                role=role,
-                company=settings.TEST_USER_COMPANY,
-                country=settings.TEST_USER_COUNTRY,
-                is_active=True,
-            )
-            session.add(user)
-            session.commit()
-            session.refresh(user)
+        user = session.get(User, uuid.UUID(user_id))
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Inactive user")
         return _detach_user(user)
+
+
+@router.post("/login", response_model=TokenResponse)
+def login(payload: LoginRequest):
+    """Authenticates a user and returns a JWT token."""
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.email == payload.email)).first()
+        if not user or not verify_password(payload.password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        token = create_access_token(user.id, user.role)
+        return TokenResponse(access_token=token)
 
 
 @router.post("/oauth/login")

@@ -24,15 +24,10 @@ def _candidate_terms() -> list[str]:
         item = (entry.get("item") or "").strip().lower()
         cas = (entry.get("cas") or "").strip().lower()
 
-        if item:
+        if item and item not in terms:
             terms.append(item)
-        if cas and cas not in {"n/a", "unknown", "multiple"}:
+        if cas and cas not in {"n/a", "unknown", "multiple"} and cas not in terms:
             terms.append(cas)
-
-        for token in item.replace("/", " ").replace("(", " ").replace(")", " ").replace(",", " ").split():
-            token = token.strip().lower()
-            if len(token) >= 4 and token not in terms:
-                terms.append(token)
 
     for material in RESTRICTED_MATERIALS:
         normalized = material.lower()

@@ -22,3 +22,4 @@ class User(SQLModel, table=True):
     country: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     is_active: bool = True
+    trust_score: float = Field(default=1.0)

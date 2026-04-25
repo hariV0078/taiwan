@@ -132,17 +132,12 @@ def generate_dpp(transaction_id: uuid.UUID, session: Session) -> DPPResult:
 
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 8, "Trust and Verification", ln=1)
-    pdf.set_font("Helvetica", size=10)
-    pdf.multi_cell(
-        0,
-        7,
-        (
-            f"Escrow Hash: {tx.escrow_hash}\n"
-            f"QAR Hash: {tx.qar_hash}\n"
-            f"TPQC Notes: {tx.qar_notes}\n"
-            f"Verified Timestamp: {tx.verified_at}"
-        ),
-    )
+    pdf.set_font("Helvetica", size=9)
+    pdf.cell(0, 6, f"Verified Timestamp: {tx.verified_at}", ln=1)
+    pdf.multi_cell(0, 5, f"Escrow Hash: {tx.escrow_hash}")
+    pdf.multi_cell(0, 5, f"QAR Hash: {tx.qar_hash}")
+    pdf.multi_cell(0, 5, f"TPQC Notes: {tx.qar_notes}")
+    pdf.ln(2)
 
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 8, "Environmental Impact", ln=1)
@@ -167,10 +162,15 @@ def generate_dpp(transaction_id: uuid.UUID, session: Session) -> DPPResult:
         ).all()
     )
     pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Audit Trail (Last 5)", ln=1)
-    pdf.set_font("Helvetica", size=9)
+    pdf.cell(0, 8, "Audit Trail (Historical Ledger)", ln=1)
+    pdf.set_font("Helvetica", size=8)
     for audit in audits:
-        pdf.multi_cell(0, 6, f"{audit.created_at} | {audit.event_type.value} | {audit.hash}")
+        created = str(audit.created_at)[:19]
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.cell(0, 5, f"EVENT: {audit.event_type.value} | {created}", ln=1)
+        pdf.set_font("Helvetica", size=7)
+        pdf.multi_cell(0, 4, f"HASH: {audit.hash}", border=0)
+        pdf.ln(1)
 
     pdf.output(pdf_path)
     os.remove(qr_path)
